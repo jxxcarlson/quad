@@ -1,11 +1,7 @@
-module Quad exposing (..)
+module Quad exposing (Quad(..), Vertices, basic, vertices, color, subdivide, center)
 
 import Array exposing (Array)
 import Maybe.Extra
-
-
-foo =
-    1
 
 
 type Quad
@@ -21,7 +17,7 @@ type alias Vertices =
 
 
 type alias Color =
-    Array Int
+    Array Float
 
 
 type alias Proportions =
@@ -48,7 +44,7 @@ basic =
             ( 0, 1 )
 
         rr =
-            255
+            1
 
         gg =
             0
@@ -56,11 +52,14 @@ basic =
         bb =
             0
 
+        aa =
+            1
+
         vertices_ =
             Array.fromList [ a, b, c, d ]
 
         color_ =
-            Array.fromList [ rr, gg, bb ]
+            Array.fromList [ rr, gg, bb, aa ]
     in
         Quad vertices_ color_
 
@@ -85,16 +84,52 @@ color (Quad vertices_ color_) =
 --
 -- SUBDIVIDE
 --
---
 
 
-subdivide : Proportions -> ColorMap -> Quad -> List Quad
-subdivide proportions colorMap quad =
+subdivide : Proportions -> Quad -> List (Maybe Quad)
+subdivide proportions quad =
+    let
+        oldVertices_ =
+            vertices quad
+
+        newVertices_ =
+            newVertices proportions quad
+
+        center_ =
+            center newVertices_
+
+        vList0 =
+            makeVertices 3 0 0 center_ oldVertices_ newVertices_
+
+        vList1 =
+            makeVertices 0 1 1 center_ oldVertices_ newVertices_
+
+        vList2 =
+            makeVertices 1 2 2 center_ oldVertices_ newVertices_
+
+        vList3 =
+            makeVertices 2 3 3 center_ oldVertices_ newVertices_
+
+        colors =
+            color quad
+    in
+        [ vList0, vList1, vList2, vList3 ]
+            |> List.map (\vv -> Maybe.map2 Quad vv (Just (color quad)))
+
+
+makeVertices : Int -> Int -> Int -> Maybe Point -> Vertices -> Maybe Vertices -> Maybe Vertices
+makeVertices i j k center_ oldVertices_ newVertices_ =
     let
         a =
-            1
+            Maybe.andThen (Array.get i) newVertices_
+
+        b =
+            Array.get j oldVertices_
+
+        c =
+            Maybe.andThen (Array.get k) newVertices_
     in
-        [ quad ]
+        [ a, b, c, center_ ] |> Maybe.Extra.combine |> Maybe.map Array.fromList
 
 
 newVertices : Proportions -> Quad -> Maybe Vertices
@@ -131,43 +166,28 @@ center vertices_ =
 computeCenter : Float -> Float -> Float -> Float -> Float -> Float -> Float -> Float -> Maybe Point
 computeCenter a b c d e f g h =
     let
-        _ =
-            Debug.log "coeff" [ a, b, c, d, e, f, g, h ]
-
         det =
-            (b - d) * (e - g) - (c - a) * (h - f)
+            Debug.log "DET" <|
+                (b - d)
+                    * (e - g)
+                    - (c - a)
+                    * (h - f)
 
         p =
-            (b - d) * a + b
+            (b - d) * a + (c - a) * b
 
         q =
-            (h - f) * g + h
+            (h - f) * g + (e - g) * h
 
         xminor =
-            p * (e - g) - q * (c - a)
+            Debug.log "X Minor" <|
+                (p * (e - g) - q * (c - a))
 
         yminor =
-            q * (b - d) - p * (h - f)
+            Debug.log "Y Minor" <|
+                (q * (b - d) - p * (h - f))
     in
-        Just ( xminor / det, -yminor / det )
-
-
-computeCenter1 : Float -> Float -> Float -> Float -> Float -> Float -> Float -> Float -> Maybe Point
-computeCenter1 a b c d e f g h =
-    let
-        m =
-            (d - b) / (c - a)
-
-        mm =
-            (f - h) / (e - g)
-
-        x =
-            (h - b) / (m - mm)
-
-        y =
-            m * (x - a) + b
-    in
-        Just ( x, y )
+        Just ( xminor / det, yminor / det )
 
 
 {-| ps = Array.fromList (List.repeat 4 0.5)
