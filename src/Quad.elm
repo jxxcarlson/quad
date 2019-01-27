@@ -86,7 +86,11 @@ color (Quad vertices_ color_) =
 --
 
 
-subdivide : Proportions -> Quad -> List (Maybe Quad)
+{-|
+
+> subdivide ps basic |> List.map (subdivide ps) |> List.concat
+-}
+subdivide : Proportions -> Quad -> List Quad
 subdivide proportions quad =
     let
         oldVertices_ =
@@ -115,6 +119,8 @@ subdivide proportions quad =
     in
         [ vList0, vList1, vList2, vList3 ]
             |> List.map (\vv -> Maybe.map2 Quad vv (Just (color quad)))
+            |> Maybe.Extra.combine
+            |> Maybe.withDefault []
 
 
 makeVertices : Int -> Int -> Int -> Maybe Point -> Vertices -> Maybe Vertices -> Maybe Vertices
@@ -167,11 +173,10 @@ computeCenter : Float -> Float -> Float -> Float -> Float -> Float -> Float -> F
 computeCenter a b c d e f g h =
     let
         det =
-            Debug.log "DET" <|
-                (b - d)
-                    * (e - g)
-                    - (c - a)
-                    * (h - f)
+            (b - d)
+                * (e - g)
+                - (c - a)
+                * (h - f)
 
         p =
             (b - d) * a + (c - a) * b
@@ -180,12 +185,10 @@ computeCenter a b c d e f g h =
             (h - f) * g + (e - g) * h
 
         xminor =
-            Debug.log "X Minor" <|
-                (p * (e - g) - q * (c - a))
+            (p * (e - g) - q * (c - a))
 
         yminor =
-            Debug.log "Y Minor" <|
-                (q * (b - d) - p * (h - f))
+            (q * (b - d) - p * (h - f))
     in
         Just ( xminor / det, yminor / det )
 
