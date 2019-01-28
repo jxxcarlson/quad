@@ -69,4 +69,4 @@ This function is repeatedly applied to `Quad.basic 800` to generate the drawing.
 
 ### Experiment1
 
-Once module `Quad` was finished and tested — most of a day's work — it was time to write a driver to see if things really worked.  Part of the work here was to "tune" program parameters to produce a satisfying result, displayed above as `quad1.png`
+Once module `Quad` was finished and tested — most of a day's work — it was time to write a driver to see if things really worked.  After the driver was tested, I spent some time  "tuning" program parameters to produce a satisfying image, displayed above as `quad1.png`
