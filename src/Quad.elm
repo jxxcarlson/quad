@@ -1,4 +1,6 @@
-module Quad exposing (Quad(..), Vertices, basic, vertices, color, subdivide, center)
+module Quad exposing (..)
+
+{- }(Quad(..), Vertices, basic, vertices, color, subdivide) -}
 
 import Array exposing (Array)
 import Maybe.Extra
@@ -16,10 +18,28 @@ type alias Vertices =
     Array Point
 
 
+{-| Use an array of size 4 with components
+in the range [0,1]. A color can be interpreted
+as either rgba or hsla.
+-}
 type alias Color =
-    Array Float
+    List Float
 
 
+type alias ColorRange =
+    List ( Float, Float )
+
+
+type alias ColorChange =
+    List Float
+
+
+{-| Use an array of size four with components in the
+range [a,b] where 0 < a < b < 1. The endpoints should
+not be too close to zero or to one. The components of this
+vector determine where division points are placed along the
+sides of quadrilateral when subdividing it.
+-}
 type alias Proportions =
     Array Float
 
@@ -28,38 +48,100 @@ type alias ColorMap =
     Color -> Color
 
 
-basic : Quad
-basic =
+{-| subdivide ps (basic 4) |> changeColorOfQuadList basicColorRange [sampleColorChange]
+-}
+changeColorOfQuadList : ColorRange -> List ColorChange -> List Quad -> List Quad
+changeColorOfQuadList colorRange colorChangeList quadList =
+    let
+        colorChangeList_ =
+            extendList (List.length quadList) colorChangeList
+    in
+        List.map2 (\colorChange_ quad_ -> changeColorOfQuad colorRange colorChange_ quad_)
+            colorChangeList_
+            quadList
+
+
+extendList : Int -> List a -> List a
+extendList n list =
+    let
+        listLength =
+            List.length list
+
+        blocks =
+            n // listLength
+
+        remainder =
+            modBy listLength n
+    in
+        (List.repeat blocks list |> List.concat) ++ List.take remainder list
+
+
+{-| changeColorOfQuad basicColorRange sampleColorChange (basic 4)
+Quad (Array.fromList [(0,0),(4,0),(4,4),(0,4)]) [0.8,0.5,0.5,1]
+: Quad
+-}
+changeColorOfQuad : ColorRange -> ColorChange -> Quad -> Quad
+changeColorOfQuad colorRange_ colorChange_ (Quad vertices_ color_) =
+    Quad vertices_ (changeColor colorRange_ colorChange_ color_)
+
+
+changeColor : ColorRange -> ColorChange -> Color -> Color
+changeColor colorRange_ colorChange_ color_ =
+    let
+        clamps =
+            List.map (\( a, b ) -> clamp a b) colorRange_
+    in
+        List.map2 (\f x -> f x)
+            clamps
+            (List.map2 (+) colorChange_ color_)
+
+
+basicColorRange =
+    [ ( 0.2, 0.8 ), ( 0.5, 1.0 ), ( 0.5, 1.0 ), ( 0.5, 1.0 ) ]
+
+
+sampleColorChange =
+    [ 0.2, -0.2, -0.1, 0.2 ]
+
+
+sampleColor =
+    [ 0.5, 0.5, 0.7, 0.7 ]
+
+
+{-| a simple quadrilateral for testing and initializatin
+-}
+basic : Float -> Quad
+basic size =
     let
         a =
             ( 0, 0 )
 
         b =
-            ( 1, 0 )
+            ( size, 0 )
 
         c =
-            ( 1, 1 )
+            ( size, size )
 
         d =
-            ( 0, 1 )
+            ( 0, size )
 
-        rr =
+        p =
             1
 
-        gg =
+        q =
             0
 
-        bb =
+        r =
             0
 
-        aa =
+        s =
             1
 
         vertices_ =
             Array.fromList [ a, b, c, d ]
 
         color_ =
-            Array.fromList [ rr, gg, bb, aa ]
+            [ p, q, r, s ]
     in
         Quad vertices_ color_
 
@@ -86,9 +168,7 @@ color (Quad vertices_ color_) =
 --
 
 
-{-|
-
-> subdivide ps basic |> List.map (subdivide ps) |> List.concat
+{-| subdivide ps (basic 4) |> List.map (subdivide ps) |> List.concat
 -}
 subdivide : Proportions -> Quad -> List Quad
 subdivide proportions quad =
