@@ -8,6 +8,8 @@ Quad is a generative art experiment based on the idea of subdividing quadrilater
 
 Some years ago I had "composed" some generative art, both static and dynamic, using Processing.  I decided to try my hand at generative art again using Elm, inspired by Xavier Ho's talk at Elm Europe 2018.  First step: search the web.  Among the links I followed was one on [Xavier's home page](https://jumptoglide.com/}), [Generated space](https://generated.space/), in particular [Organic grid](https://generated.space/sketch/organic-grid-2/), which I admired.  Looking at Organic Grid, I could see what the main principles were: (a) start with a square of a certain color, add a random node on each side, then connect nodes on opposite sides to divide the square into four quadrilaterals; repeat this process a certain number of times on each of the subquadrilaterals; (b) as each parent quadrilateral is subdivided, randomly modify the colors of the parent to produce the colors of the children.
 
+### Quad
+
 Most of the work on this project was in writing module `Quad`, and the first step was to make the central type definition:
 
 ```
@@ -64,3 +66,7 @@ This function is repeatedly applied to `Quad.basic 800` to generate the drawing.
           ]
           []
 ```
+
+### Experiment1
+
+Once module `Quad` was finished and tested — most of a day's work — it was time to write a driver to see if things really worked.  Part of the work here was to "tune" program parameters to produce a satisfying result, displayed above as `quad1.png`
