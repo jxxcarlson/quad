@@ -4,6 +4,11 @@ module Quad exposing (..)
 
 import Array exposing (Array)
 import Maybe.Extra
+import Color
+import TypedSvg exposing (svg)
+import TypedSvg.Attributes exposing (points, fill, stroke)
+import TypedSvg.Types exposing (Fill(..), px)
+import Svg exposing (Svg)
 
 
 type Quad
@@ -34,6 +39,10 @@ type alias ColorChange =
     List Float
 
 
+type alias ColorMap =
+    Quad -> Color.Color
+
+
 {-| Use an array of size four with components in the
 range [a,b] where 0 < a < b < 1. The endpoints should
 not be too close to zero or to one. The components of this
@@ -44,8 +53,24 @@ type alias Proportions =
     Array Float
 
 
-type alias ColorMap =
-    Color -> Color
+render : ColorMap -> Quad -> Svg msg
+render colorMap quad =
+    TypedSvg.polygon
+        [ fill <| Fill (colorMap quad)
+        , stroke Color.black
+        , points (Array.toList <| vertices quad)
+        ]
+        []
+
+
+
+-- render : Quad -> Svg msg
+-- render quad =
+--     TypedSvg.polygon
+--         [ stroke Color.black
+--         , points (Array.toList <| vertices quad)
+--         ]
+--         []
 
 
 {-| subdivide ps (basic 4) |> changeColorOfQuadList basicColorRange [sampleColorChange]
@@ -160,6 +185,26 @@ vertices (Quad vertices_ color_) =
 color : Quad -> Color
 color (Quad vertices_ color_) =
     color_
+
+
+hsla : Quad -> Color.Color
+hsla (Quad v cc) =
+    case cc of
+        [ a, b, c, d ] ->
+            Color.hsla a b c d
+
+        _ ->
+            Color.black
+
+
+rgba : Quad -> Color.Color
+rgba (Quad v cc) =
+    case cc of
+        [ a, b, c, d ] ->
+            Color.rgba a b c d
+
+        _ ->
+            Color.black
 
 
 
