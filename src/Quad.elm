@@ -57,20 +57,10 @@ render : ColorMap -> Quad -> Svg msg
 render colorMap quad =
     TypedSvg.polygon
         [ fill <| Fill (colorMap quad)
-        , stroke Color.black
+        , stroke Color.gray
         , points (Array.toList <| vertices quad)
         ]
         []
-
-
-
--- render : Quad -> Svg msg
--- render quad =
---     TypedSvg.polygon
---         [ stroke Color.black
---         , points (Array.toList <| vertices quad)
---         ]
---         []
 
 
 {-| subdivide ps (basic 4) |> changeColorOfQuadList basicColorRange [sampleColorChange]
@@ -98,7 +88,9 @@ extendList n list =
         remainder =
             modBy listLength n
     in
-        (List.repeat blocks list |> List.concat) ++ List.take remainder list
+        (List.repeat blocks list |> List.concat)
+            ++ List.take remainder list
+            |> List.take n
 
 
 {-| changeColorOfQuad basicColorRange sampleColorChange (basic 4)
@@ -122,15 +114,19 @@ changeColor colorRange_ colorChange_ color_ =
 
 
 basicColorRange =
-    [ ( 0.2, 0.8 ), ( 0.5, 1.0 ), ( 0.5, 1.0 ), ( 0.5, 1.0 ) ]
+    [ ( 0.2, 0.7 ), ( 0.2, 0.5 ), ( 0.5, 1.0 ), ( 0.5, 1.0 ) ]
 
 
 sampleColorChange =
-    [ 0.2, -0.2, -0.1, 0.2 ]
+    [ 0.01, -0.02, -0.01, 0.02 ]
 
 
 sampleColor =
     [ 0.5, 0.5, 0.7, 0.7 ]
+
+
+sampleProportions =
+    Array.fromList [ 0.4, 0.5, 0.6, 0.7 ]
 
 
 {-| a simple quadrilateral for testing and initializatin
@@ -211,6 +207,16 @@ rgba (Quad v cc) =
 --
 -- SUBDIVIDE
 --
+
+
+{-| update basicColorRange [sampleColorChange] ps [basic 4]
+-}
+update : ColorRange -> List ColorChange -> Proportions -> List Quad -> List Quad
+update colorRange colorChangeList proportions quadList =
+    quadList
+        |> List.map (subdivide proportions)
+        |> List.concat
+        |> changeColorOfQuadList colorRange colorChangeList
 
 
 {-| subdivide ps (basic 4) |> List.map (subdivide ps) |> List.concat

@@ -1,1 +1,1 @@
-elm make src/Quad.elm
+elm make  src/Example1.elm
