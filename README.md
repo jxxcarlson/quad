@@ -52,7 +52,7 @@ The code for evolving the color was easier to write, and once it was done, I def
     -> List Quad
 ```
 
-This function is repeatedly applied to `Quad.basic 800` to generate the drawing.  nTo render it, one uses the function
+This function is repeatedly applied to `Quad.basic 800` to generate the drawing.  To render it, one uses the function
 
 ```
   render : ColorMap -> Quad -> Svg msg
