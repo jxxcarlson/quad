@@ -1,4 +1,14 @@
-module Quad exposing (..)
+module Quad
+    exposing
+        ( Quad
+        , render
+        , update
+        , basic
+        , sampleProportions
+        , basicColorRange
+        , hsla
+        , rgba
+        )
 
 {- }(Quad(..), Vertices, basic, vertices, color, subdivide) -}
 
