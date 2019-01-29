@@ -67,7 +67,8 @@ render : ColorMap -> Quad -> Svg msg
 render colorMap quad =
     TypedSvg.polygon
         [ fill <| Fill (colorMap quad)
-        , stroke Color.gray
+
+        -- , stroke Color.gray
         , points (Array.toList <| vertices quad)
         ]
         []
@@ -90,7 +91,7 @@ update colorRange colorChangeList proportions quadList =
 
 
 basicColorRange =
-    [ ( 0.2, 0.7 ), ( 0.2, 0.5 ), ( 0.5, 1.0 ), ( 0.5, 1.0 ) ]
+    [ ( 0.5, 0.6 ), ( 0.2, 0.4 ), ( 0.0, 1.0 ), ( 0.99, 1.0 ) ]
 
 
 sampleColorChange =
