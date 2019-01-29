@@ -73,54 +73,20 @@ render colorMap quad =
         []
 
 
-{-| subdivide ps (basic 4) |> changeColorOfQuadList basicColorRange [sampleColorChange]
+{-| update basicColorRange [sampleColorChange] ps [basic 4]
 -}
-changeColorOfQuadList : ColorRange -> List ColorChange -> List Quad -> List Quad
-changeColorOfQuadList colorRange colorChangeList quadList =
-    let
-        colorChangeList_ =
-            extendList (List.length quadList) colorChangeList
-    in
-        List.map2 (\colorChange_ quad_ -> changeColorOfQuad colorRange colorChange_ quad_)
-            colorChangeList_
-            quadList
+update : ColorRange -> List ColorChange -> Proportions -> List Quad -> List Quad
+update colorRange colorChangeList proportions quadList =
+    quadList
+        |> List.map (subdivide proportions)
+        |> List.concat
+        |> changeColorOfQuadList colorRange colorChangeList
 
 
-extendList : Int -> List a -> List a
-extendList n list =
-    let
-        listLength =
-            List.length list
 
-        blocks =
-            n // listLength
-
-        remainder =
-            modBy listLength n
-    in
-        (List.repeat blocks list |> List.concat)
-            ++ List.take remainder list
-            |> List.take n
-
-
-{-| changeColorOfQuad basicColorRange sampleColorChange (basic 4)
-Quad (Array.fromList [(0,0),(4,0),(4,4),(0,4)]) [0.8,0.5,0.5,1]
-: Quad
--}
-changeColorOfQuad : ColorRange -> ColorChange -> Quad -> Quad
-changeColorOfQuad colorRange_ colorChange_ (Quad vertices_ color_) =
-    Quad vertices_ (changeColor colorRange_ colorChange_ color_)
-
-
-changeColor : ColorRange -> ColorChange -> Color -> Color
-changeColor colorRange_ colorChange_ color_ =
-    let
-        clamps =
-            List.map (\( a, b ) -> clamp a b) colorRange_
-    in
-        List.map2 (\f x -> f x)
-            clamps
-            (List.map2 (+) colorChange_ color_)
+--
+-- DATA
+--
 
 
 basicColorRange =
@@ -136,6 +102,10 @@ sampleColor =
 
 
 sampleProportions =
+    Array.fromList [ 0.4, 0.5, 0.3, 0.7 ]
+
+
+sampleProportions1 =
     Array.fromList [ 0.4, 0.5, 0.6, 0.7 ]
 
 
@@ -193,6 +163,12 @@ color (Quad vertices_ color_) =
     color_
 
 
+
+--
+-- COLOR
+--
+
+
 hsla : Quad -> Color.Color
 hsla (Quad v cc) =
     case cc of
@@ -213,20 +189,60 @@ rgba (Quad v cc) =
             Color.black
 
 
+{-| subdivide ps (basic 4) |> changeColorOfQuadList basicColorRange [sampleColorChange]
+-}
+changeColorOfQuadList : ColorRange -> List ColorChange -> List Quad -> List Quad
+changeColorOfQuadList colorRange colorChangeList quadList =
+    let
+        colorChangeList_ =
+            extendList (List.length quadList) colorChangeList
+    in
+        List.map2 (\colorChange_ quad_ -> changeColorOfQuad colorRange colorChange_ quad_)
+            colorChangeList_
+            quadList
+
+
+extendList : Int -> List a -> List a
+extendList n list =
+    let
+        listLength =
+            List.length list
+
+        blocks =
+            n // listLength
+
+        remainder =
+            modBy listLength n
+    in
+        (List.repeat blocks list |> List.concat)
+            ++ List.take remainder list
+            |> List.take n
+
+
+{-| changeColorOfQuad basicColorRange sampleColorChange (basic 4)
+Quad (Array.fromList [(0,0),(4,0),(4,4),(0,4)]) [0.8,0.5,0.5,1]
+: Quad
+-}
+changeColorOfQuad : ColorRange -> ColorChange -> Quad -> Quad
+changeColorOfQuad colorRange_ colorChange_ (Quad vertices_ color_) =
+    Quad vertices_ (changeColor colorRange_ colorChange_ color_)
+
+
+changeColor : ColorRange -> ColorChange -> Color -> Color
+changeColor colorRange_ colorChange_ color_ =
+    let
+        clamps =
+            List.map (\( a, b ) -> clamp a b) colorRange_
+    in
+        List.map2 (\f x -> f x)
+            clamps
+            (List.map2 (+) colorChange_ color_)
+
+
 
 --
 -- SUBDIVIDE
 --
-
-
-{-| update basicColorRange [sampleColorChange] ps [basic 4]
--}
-update : ColorRange -> List ColorChange -> Proportions -> List Quad -> List Quad
-update colorRange colorChangeList proportions quadList =
-    quadList
-        |> List.map (subdivide proportions)
-        |> List.concat
-        |> changeColorOfQuadList colorRange colorChangeList
 
 
 {-| subdivide ps (basic 4) |> List.map (subdivide ps) |> List.concat
