@@ -1,6 +1,8 @@
 module Quad
     exposing
         ( Quad
+        , ColorRange
+        , Proportions
         , render
         , update
         , basic
