@@ -1,1 +1,1 @@
-elm make  src/HttpDriver.elm
+elm make  --optimize src/HttpDriver.elm

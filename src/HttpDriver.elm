@@ -14,8 +14,10 @@ import TypedSvg.Attributes exposing (viewBox, height, width)
 import TypedSvg.Types exposing (px)
 import Time
 import Random
+import Http
 import Quad exposing (Quad, Proportions, ColorRange, render)
 import Parameters exposing (..)
+import Utility
 
 
 main =
@@ -35,16 +37,19 @@ type Msg
     = NoOp
     | Tick Time.Posix
     | GetRandomNumbers (List Float)
+    | GotSensorValue (Result Http.Error String)
 
 
 type alias Model =
     { count : Int
     , randomNumbers : List Float
     , drawing : List Quad
+    , oldDrawing : List Quad
     , depth : Int
     , proportions : Proportions
     , colorRange : ColorRange
     , maxDepth : Int
+    , sensorValue : Maybe Float
     }
 
 
@@ -53,10 +58,12 @@ init flags =
     ( { count = 0
       , randomNumbers = List.repeat 10 0.1
       , drawing = [ Quad.basic 750 ]
+      , oldDrawing = [ Quad.basic 750 ]
       , proportions = Quad.sampleProportions
-      , colorRange = Quad.basicColorRange
+      , colorRange = [ ( 0.5, 0.6 ), ( 0.5, 0.6 ), ( 0.3, 0.4 ), ( 0.99, 1.0 ) ]
       , depth = 1
       , maxDepth = 6
+      , sensorValue = Nothing
       }
     , Cmd.none
     )
@@ -83,7 +90,7 @@ hueSaturationChanges dhList dsList =
 
 
 subscriptions model =
-    Time.every 100 Tick
+    Time.every 200 Tick
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -99,10 +106,8 @@ update msg model =
             if model.depth < model.maxDepth then
                 let
                     rands =
-                        Debug.log "rand"
-                            (model.randomNumbers
-                                |> List.map (\x -> (2 * x - 1) / 8.0)
-                            )
+                        model.randomNumbers
+                            |> List.map (\x -> (2 * x - 1) / 8.0)
 
                     colorChanges =
                         hueSaturationChanges (List.take 5 rands) (List.drop 5 rands)
@@ -114,14 +119,92 @@ update msg model =
                             model.proportions
                             model.drawing
                 in
-                    ( { model | depth = model.depth + 1, drawing = newDrawing }, Random.generate GetRandomNumbers (Random.list 10 (Random.float 0 1)) )
+                    ( { model | depth = model.depth + 1, drawing = newDrawing, oldDrawing = model.drawing }
+                    , Random.generate GetRandomNumbers (Random.list 10 (Random.float 0 1))
+                    )
             else
-                ( model, Cmd.none )
+                ( model, getSensorValue )
+
+        GotSensorValue result ->
+            case result of
+                Ok str ->
+                    let
+                        maybeSensorValue =
+                            String.toFloat str
+                                |> Maybe.map (Utility.roundToPlaces 1)
+                                |> Maybe.map (Utility.mapToRange 1 50 0 1)
+
+                        newDepth =
+                            resetDepth maybeSensorValue model
+
+                        newDrawing =
+                            if newDepth == 1 then
+                                [ Quad.basic 750 ]
+                            else
+                                model.drawing
+                    in
+                        ( { model
+                            | sensorValue = maybeSensorValue
+                            , colorRange = setColorRange maybeSensorValue model.colorRange
+                            , depth = resetDepth maybeSensorValue model
+                            , drawing = newDrawing
+                          }
+                        , Cmd.none
+                        )
+
+                Err _ ->
+                    ( model, Cmd.none )
 
 
 view : Model -> Html Msg
 view model =
-    svg
-        [ width (px 900), height (px 900) ]
-    <|
-        List.map (Quad.render Quad.hsla) model.drawing
+    let
+        currentDrawing =
+            if model.depth == 1 then
+                model.oldDrawing
+            else
+                model.drawing
+    in
+        svg
+            [ width (px 900), height (px 900) ]
+        <|
+            List.map (Quad.render Quad.hsla) currentDrawing
+
+
+getSensorValue : Cmd Msg
+getSensorValue =
+    Http.get
+        { url = "http:raspberrypi.local:8000/distance"
+        , expect = Http.expectString GotSensorValue
+        }
+
+
+setColorRange : Maybe Float -> ColorRange -> ColorRange
+setColorRange sensorValue colorRange =
+    case sensorValue of
+        Nothing ->
+            colorRange
+
+        Just p ->
+            ( p / 2, p ) :: (List.drop 1 colorRange)
+
+
+resetDepth : Maybe Float -> Model -> Int
+resetDepth maybeSensorValue model =
+    case ( maybeSensorValue, model.sensorValue ) of
+        ( Nothing, _ ) ->
+            model.depth
+
+        ( Just newSensorValue, Nothing ) ->
+            1
+
+        ( Just newSensorValue, Just oldSensorValue ) ->
+            case abs (newSensorValue - oldSensorValue) < 0.05 of
+                True ->
+                    model.depth
+
+                False ->
+                    if model.depth == model.maxDepth then
+                        1
+                    else
+                        model.depth
