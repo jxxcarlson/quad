@@ -77,7 +77,7 @@ hueChange h =
 
 hueSaturationChange : Float -> Float -> List Float
 hueSaturationChange h s =
-    [ h, s, s, s ]
+    [ h, 0, 0, 0 ]
 
 
 hueChanges : List Float -> List (List Float)
@@ -110,6 +110,12 @@ update msg model =
                         model.randomNumbers
                             |> List.map (\x -> (2 * x - 1) / 8.0)
 
+                    newProportions =
+                        if model.depth > 1 then
+                            Quad.addChangesToProportions 0.2 0.8 (List.take 4 rands) model.proportions
+                        else
+                            model.proportions
+
                     colorChanges =
                         hueSaturationChanges (List.take 5 rands) (List.drop 5 rands)
 
@@ -117,10 +123,15 @@ update msg model =
                         Quad.update
                             model.colorRange
                             colorChanges
-                            model.proportions
+                            newProportions
                             model.drawing
                 in
-                    ( { model | depth = model.depth + 1, drawing = newDrawing, oldDrawing = model.drawing }
+                    ( { model
+                        | depth = model.depth + 1
+                        , drawing = newDrawing
+                        , oldDrawing = model.drawing
+                        , proportions = newProportions
+                      }
                     , Cmd.batch
                         [ Random.generate GetRandomNumbers (Random.list 10 (Random.float 0 1))
                         , ledCommand model.count
@@ -219,7 +230,14 @@ setColorRange sensorValue colorRange =
             colorRange
 
         Just p ->
-            ( p / 2, p ) :: (List.drop 1 colorRange)
+            let
+                a =
+                    0.7 * p |> clamp 0 1
+
+                b =
+                    1.3 * p |> clamp 0 1
+            in
+                ( a, b ) :: (List.drop 1 colorRange)
 
 
 resetDepth : Maybe Float -> Model -> Int

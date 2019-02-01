@@ -42,6 +42,7 @@ type alias Model =
     , drawing : List Quad
     , depth : Int
     , maxDepth : Int
+    , count : Int
     }
 
 
@@ -52,6 +53,7 @@ init flags =
       , drawing = [ Quad.basic 750 ]
       , depth = 1
       , maxDepth = 6
+      , count = 0
       }
     , Cmd.none
     )
@@ -109,9 +111,15 @@ update msg model =
                             Quad.sampleProportions
                             model.drawing
                 in
-                    ( { model | depth = model.depth + 1, drawing = newDrawing }, Random.generate GetRandomNumbers (Random.list 10 (Random.float 0 1)) )
+                    ( { model
+                        | depth = model.depth + 1
+                        , drawing = newDrawing
+                        , count = model.count + 1
+                      }
+                    , Random.generate GetRandomNumbers (Random.list 10 (Random.float 0 1))
+                    )
             else
-                ( model, Cmd.none )
+                ( { model | count = model.count + 1 }, Cmd.none )
 
 
 view : Model -> Html Msg

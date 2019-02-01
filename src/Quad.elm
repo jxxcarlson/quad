@@ -10,6 +10,7 @@ module Quad
         , basicColorRange
         , hsla
         , rgba
+        , addChangesToProportions
         )
 
 {- }(Quad(..), Vertices, basic, vertices, color, subdivide) -}
@@ -69,11 +70,23 @@ render : ColorMap -> Quad -> Svg msg
 render colorMap quad =
     TypedSvg.polygon
         [ fill <| Fill (colorMap quad)
-
-        -- , stroke Color.gray
+        , stroke Color.black
         , points (Array.toList <| vertices quad)
         ]
         []
+
+
+addChangesToProportions : Float -> Float -> List Float -> Proportions -> Proportions
+addChangesToProportions lowerBound upperBound dps proportions =
+    let
+        proportionList =
+            Array.toList proportions
+
+        newProportions =
+            List.map2 (+) proportionList dps
+                |> List.map (clamp lowerBound upperBound)
+    in
+        Array.fromList newProportions
 
 
 {-| update basicColorRange [sampleColorChange] ps [basic 4]
