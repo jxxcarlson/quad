@@ -38,6 +38,7 @@ type Msg
     | Tick Time.Posix
     | GetRandomNumbers (List Float)
     | GotSensorValue (Result Http.Error String)
+    | SentLedCommand (Result Http.Error ())
 
 
 type alias Model =
@@ -120,10 +121,16 @@ update msg model =
                             model.drawing
                 in
                     ( { model | depth = model.depth + 1, drawing = newDrawing, oldDrawing = model.drawing }
-                    , Random.generate GetRandomNumbers (Random.list 10 (Random.float 0 1))
+                    , Cmd.batch
+                        [ Random.generate GetRandomNumbers (Random.list 10 (Random.float 0 1))
+                        , ledCommand model.count
+                        ]
                     )
             else
                 ( model, getSensorValue )
+
+        SentLedCommand result ->
+            ( { model | count = model.count + 1 }, Cmd.none )
 
         GotSensorValue result ->
             case result of
@@ -176,6 +183,32 @@ getSensorValue =
     Http.get
         { url = "http:raspberrypi.local:8000/distance"
         , expect = Http.expectString GotSensorValue
+        }
+
+
+ledCommand : Int -> Cmd Msg
+ledCommand count =
+    case modBy 2 count == 0 of
+        True ->
+            ledOn
+
+        False ->
+            ledOff
+
+
+ledOn : Cmd Msg
+ledOn =
+    Http.get
+        { url = "http:raspberrypi.local:8000/ledOn"
+        , expect = Http.expectWhatever SentLedCommand
+        }
+
+
+ledOff : Cmd Msg
+ledOff =
+    Http.get
+        { url = "http:raspberrypi.local:8000/ledOff"
+        , expect = Http.expectWhatever SentLedCommand
         }
 
 
