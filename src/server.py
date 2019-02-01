@@ -40,11 +40,20 @@ print GPIO.getmode()
 led = 17
 GPIO.setup(led, GPIO.OUT)
 
+led2 = 22
+GPIO.setup(led2, GPIO.OUT)
+
 def ledOn():
   GPIO.output(led, 1)
 
 def ledOff():
   GPIO.output(led, 0)
+
+def led2On():
+  GPIO.output(led2, 1)
+
+def led2Off():
+  GPIO.output(led2, 0)
 
 ## Ultrasonic distance measurement:
 
@@ -118,6 +127,7 @@ running = True
 
 class S(BaseHTTPRequestHandler):
 
+
     def _set_headers(self):
         self.send_response(200)
         self.send_header('Content-type', 'text/html')
@@ -128,14 +138,22 @@ class S(BaseHTTPRequestHandler):
         if self.path.find("/params") == 0:
           data = parameters(0.5, 0.6, 0.2, 0.4 )
           message = data # data
+        elif self.path.find("/distance") == 0:
+          led2On()
+          message = distance()
         elif self.path.find("/ledOn") == 0:
           message = "led on"
           ledOn()
+          led2Off()
         elif self.path.find("/ledOff") == 0:
-          message = "ledOff"
+          message = "led off"
           ledOff()
-        elif self.path.find("/distance") == 0:
-          message = distance()
+        elif self.path.find("/led2On") == 0:
+          message = "led2 on"
+          led2On()
+        elif self.path.find("/led2Off") == 0:
+          message = "led2 off"
+          led2Off()
         elif self.path.find("/cleanup") == 0:
           message = "cleanup"
           GPIO.cleanup()

@@ -51,6 +51,7 @@ type alias Model =
     , colorRange : ColorRange
     , maxDepth : Int
     , sensorValue : Maybe Float
+    , stayAliveTreshold : Float
     }
 
 
@@ -61,10 +62,11 @@ init flags =
       , drawing = [ Quad.basic 750 ]
       , oldDrawing = [ Quad.basic 750 ]
       , proportions = Quad.sampleProportions
-      , colorRange = [ ( 0.5, 0.6 ), ( 0.5, 0.6 ), ( 0.3, 0.4 ), ( 0.99, 1.0 ) ]
+      , colorRange = [ ( 0.5, 0.6 ), ( 0.5, 0.6 ), ( 0.2, 1.0 ), ( 0.99, 1.0 ) ]
       , depth = 1
       , maxDepth = 6
       , sensorValue = Nothing
+      , stayAliveTreshold = 0.2
       }
     , Cmd.none
     )
@@ -80,6 +82,11 @@ hueSaturationChange h s =
     [ h, 0, 0, 0 ]
 
 
+hslChange : Float -> Float -> Float -> List Float
+hslChange h s l =
+    [ h, s, l, 0 ]
+
+
 hueChanges : List Float -> List (List Float)
 hueChanges dhList =
     List.map hueChange dhList
@@ -88,6 +95,11 @@ hueChanges dhList =
 hueSaturationChanges : List Float -> List Float -> List (List Float)
 hueSaturationChanges dhList dsList =
     List.map2 hueSaturationChange dhList dsList
+
+
+hslChanges : List Float -> List Float -> List Float -> List (List Float)
+hslChanges dhList dsList dlList =
+    List.map3 hslChange dhList dsList dlList
 
 
 subscriptions model =
@@ -117,10 +129,12 @@ update msg model =
                             model.proportions
 
                     colorChanges =
-                        hueSaturationChanges (List.take 5 rands) (List.drop 5 rands)
+                        hslChanges (List.take 5 rands) (List.drop 5 rands) (List.drop 5 rands)
 
                     newDrawing =
                         Quad.update
+                            model.stayAliveTreshold
+                            model.randomNumbers
                             model.colorRange
                             colorChanges
                             newProportions
@@ -138,7 +152,7 @@ update msg model =
                         ]
                     )
             else
-                ( model, getSensorValue )
+                ( model, Cmd.batch [ getSensorValue ] )
 
         SentLedCommand result ->
             ( { model | count = model.count + 1 }, Cmd.none )

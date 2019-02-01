@@ -25,7 +25,12 @@ import Svg exposing (Svg)
 
 
 type Quad
-    = Quad Vertices Color
+    = Quad Vertices Color State
+
+
+type State
+    = Alive
+    | Dead
 
 
 type alias Point =
@@ -91,12 +96,30 @@ addChangesToProportions lowerBound upperBound dps proportions =
 
 {-| update basicColorRange [sampleColorChange] ps [basic 4]
 -}
-update : ColorRange -> List ColorChange -> Proportions -> List Quad -> List Quad
-update colorRange colorChangeList proportions quadList =
+update : Float -> List Float -> ColorRange -> List ColorChange -> Proportions -> List Quad -> List Quad
+update threshold randomNumbers colorRange colorChangeList proportions quadList =
     quadList
+        |> setStateOfQuadList threshold randomNumbers
         |> List.map (subdivide proportions)
         |> List.concat
         |> changeColorOfQuadList colorRange colorChangeList
+
+
+setStateOfQuadList : Float -> List Float -> List Quad -> List Quad
+setStateOfQuadList threshold probabilities quadList =
+    let
+        ps =
+            extendList (List.length quadList) probabilities
+    in
+        List.map2 (setState threshold) ps quadList
+
+
+setState : Float -> Float -> Quad -> Quad
+setState threshold p (Quad vv cc state_) =
+    if p > threshold then
+        (Quad vv cc Alive)
+    else
+        (Quad vv cc Dead)
 
 
 
@@ -160,7 +183,7 @@ basic size =
         color_ =
             [ p, q, r, s ]
     in
-        Quad vertices_ color_
+        Quad vertices_ color_ Alive
 
 
 
@@ -170,13 +193,18 @@ basic size =
 
 
 vertices : Quad -> Vertices
-vertices (Quad vertices_ color_) =
+vertices (Quad vertices_ color_ state_) =
     vertices_
 
 
 color : Quad -> Color
-color (Quad vertices_ color_) =
+color (Quad vertices_ color_ state_) =
     color_
+
+
+state : Quad -> State
+state (Quad vertices_ color_ state_) =
+    state_
 
 
 
@@ -186,7 +214,7 @@ color (Quad vertices_ color_) =
 
 
 hsla : Quad -> Color.Color
-hsla (Quad v cc) =
+hsla (Quad v cc state_) =
     case cc of
         [ a, b, c, d ] ->
             Color.hsla a b c d
@@ -196,7 +224,7 @@ hsla (Quad v cc) =
 
 
 rgba : Quad -> Color.Color
-rgba (Quad v cc) =
+rgba (Quad v cc state_) =
     case cc of
         [ a, b, c, d ] ->
             Color.rgba a b c d
@@ -240,8 +268,8 @@ Quad (Array.fromList [(0,0),(4,0),(4,4),(0,4)]) [0.8,0.5,0.5,1]
 : Quad
 -}
 changeColorOfQuad : ColorRange -> ColorChange -> Quad -> Quad
-changeColorOfQuad colorRange_ colorChange_ (Quad vertices_ color_) =
-    Quad vertices_ (changeColor colorRange_ colorChange_ color_)
+changeColorOfQuad colorRange_ colorChange_ (Quad vertices_ color_ state_) =
+    Quad vertices_ (changeColor colorRange_ colorChange_ color_) state_
 
 
 changeColor : ColorRange -> ColorChange -> Color -> Color
@@ -265,35 +293,40 @@ changeColor colorRange_ colorChange_ color_ =
 -}
 subdivide : Proportions -> Quad -> List Quad
 subdivide proportions quad =
-    let
-        oldVertices_ =
-            vertices quad
+    case (state quad) of
+        Dead ->
+            [ quad ]
 
-        newVertices_ =
-            newVertices proportions quad
+        Alive ->
+            let
+                oldVertices_ =
+                    vertices quad
 
-        center_ =
-            center newVertices_
+                newVertices_ =
+                    newVertices proportions quad
 
-        vList0 =
-            makeVertices 3 0 0 center_ oldVertices_ newVertices_
+                center_ =
+                    center newVertices_
 
-        vList1 =
-            makeVertices 0 1 1 center_ oldVertices_ newVertices_
+                vList0 =
+                    makeVertices 3 0 0 center_ oldVertices_ newVertices_
 
-        vList2 =
-            makeVertices 1 2 2 center_ oldVertices_ newVertices_
+                vList1 =
+                    makeVertices 0 1 1 center_ oldVertices_ newVertices_
 
-        vList3 =
-            makeVertices 2 3 3 center_ oldVertices_ newVertices_
+                vList2 =
+                    makeVertices 1 2 2 center_ oldVertices_ newVertices_
 
-        colors =
-            color quad
-    in
-        [ vList0, vList1, vList2, vList3 ]
-            |> List.map (\vv -> Maybe.map2 Quad vv (Just (color quad)))
-            |> Maybe.Extra.combine
-            |> Maybe.withDefault []
+                vList3 =
+                    makeVertices 2 3 3 center_ oldVertices_ newVertices_
+
+                colors =
+                    color quad
+            in
+                [ vList0, vList1, vList2, vList3 ]
+                    |> List.map (\vv -> Maybe.map3 Quad vv (Just (color quad)) (Just <| state quad))
+                    |> Maybe.Extra.combine
+                    |> Maybe.withDefault []
 
 
 makeVertices : Int -> Int -> Int -> Maybe Point -> Vertices -> Maybe Vertices -> Maybe Vertices
