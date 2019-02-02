@@ -39,6 +39,7 @@ type Msg
     | GetRandomNumbers (List Float)
     | GotSensorValue (Result Http.Error String)
     | SentLedCommand (Result Http.Error ())
+    | SentLed2Command (Result Http.Error ())
 
 
 type alias Model =
@@ -52,7 +53,13 @@ type alias Model =
     , maxDepth : Int
     , sensorValue : Maybe Float
     , stayAliveTreshold : Float
+    , appState : AppState
     }
+
+
+type AppState
+    = Resting
+    | GeneratingImage
 
 
 init : Flags -> ( Model, Cmd Msg )
@@ -67,6 +74,7 @@ init flags =
       , maxDepth = 6
       , sensorValue = Nothing
       , stayAliveTreshold = 0.2
+      , appState = Resting
       }
     , Cmd.none
     )
@@ -145,17 +153,21 @@ update msg model =
                         , drawing = newDrawing
                         , oldDrawing = model.drawing
                         , proportions = newProportions
+                        , appState = GeneratingImage
                       }
                     , Cmd.batch
                         [ Random.generate GetRandomNumbers (Random.list 10 (Random.float 0 1))
-                        , ledCommand model.count
+                        , ledCommand model
                         ]
                     )
             else
-                ( model, Cmd.batch [ getSensorValue ] )
+                ( { model | appState = Resting }, Cmd.batch [ getSensorValue, ledCommand model ] )
 
         SentLedCommand result ->
             ( { model | count = model.count + 1 }, Cmd.none )
+
+        SentLed2Command result ->
+            ( model, Cmd.none )
 
         GotSensorValue result ->
             case result of
@@ -211,14 +223,17 @@ getSensorValue =
         }
 
 
-ledCommand : Int -> Cmd Msg
-ledCommand count =
-    case modBy 2 count == 0 of
-        True ->
-            ledOn
+ledCommand : Model -> Cmd Msg
+ledCommand model =
+    case ( model.appState, modBy 2 model.count == 0 ) of
+        ( GeneratingImage, True ) ->
+            Cmd.batch [ ledOn, led2Off ]
 
-        False ->
-            ledOff
+        ( GeneratingImage, False ) ->
+            Cmd.batch [ ledOff, led2Off ]
+
+        ( Resting, _ ) ->
+            Cmd.batch [ ledOff, led2On ]
 
 
 ledOn : Cmd Msg
@@ -234,6 +249,22 @@ ledOff =
     Http.get
         { url = "http:raspberrypi.local:8000/ledOff"
         , expect = Http.expectWhatever SentLedCommand
+        }
+
+
+led2On : Cmd Msg
+led2On =
+    Http.get
+        { url = "http:raspberrypi.local:8000/led2On"
+        , expect = Http.expectWhatever SentLed2Command
+        }
+
+
+led2Off : Cmd Msg
+led2Off =
+    Http.get
+        { url = "http:raspberrypi.local:8000/led2Off"
+        , expect = Http.expectWhatever SentLed2Command
         }
 
 
