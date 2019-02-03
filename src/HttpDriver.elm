@@ -50,6 +50,7 @@ type Msg
     | RunApp
     | Step
     | AdjustValue DataType Float
+    | ToggleRenderMode
 
 
 type alias Model =
@@ -171,6 +172,14 @@ update msg model =
               }
             , Cmd.none
             )
+
+        ToggleRenderMode ->
+            case model.renderMode of
+                Stroke ->
+                    ( { model | renderMode = NoStroke }, Cmd.none )
+
+                NoStroke ->
+                    ( { model | renderMode = Stroke }, Cmd.none )
 
         AdjustValue dataType value ->
             ( setValue model dataType value, Cmd.none )
@@ -308,6 +317,7 @@ controlPanel model =
             , stepButton (model.appState == Stepping)
             , pauseButton (model.appState == Pause)
             ]
+        , toggleRenderModeButton model.renderMode
         , dataRow1 "Max depth" (String.fromInt model.maxDepth)
         , Element.column [ spacing 4 ]
             [ dataRow "Hue" (Quad.lowValueAsString 0 model.colorRange) (Quad.highValueAsString 0 model.colorRange)
@@ -477,6 +487,24 @@ pauseButton active =
         { onPress = Just PauseApp
         , label = Element.el (buttonStyle active) (text "Pause")
         }
+
+
+toggleRenderModeButton : RenderMode -> Element Msg
+toggleRenderModeButton renderMode =
+    Input.button []
+        { onPress = Just ToggleRenderMode
+        , label = Element.el (buttonStyle False) (text <| renderModeAsString renderMode)
+        }
+
+
+renderModeAsString : RenderMode -> String
+renderModeAsString renderMode =
+    case renderMode of
+        Stroke ->
+            "Outline"
+
+        NoStroke ->
+            "No outline"
 
 
 
