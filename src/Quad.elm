@@ -4,6 +4,7 @@ module Quad
         , ColorRange
         , Proportions
         , Position(..)
+        , RenderMode(..)
         , render
         , update
         , basic
@@ -118,14 +119,28 @@ type alias Proportions =
     Array Float
 
 
-render : ColorMap -> Quad -> Svg msg
-render colorMap quad =
-    TypedSvg.polygon
-        [ fill <| Fill (colorMap quad)
-        , stroke Color.black
-        , points (Array.toList <| vertices quad)
-        ]
-        []
+type RenderMode
+    = Stroke
+    | NoStroke
+
+
+render : RenderMode -> ColorMap -> Quad -> Svg msg
+render renderMode colorMap quad =
+    case renderMode of
+        Stroke ->
+            TypedSvg.polygon
+                [ fill <| Fill (colorMap quad)
+                , stroke Color.black
+                , points (Array.toList <| vertices quad)
+                ]
+                []
+
+        NoStroke ->
+            TypedSvg.polygon
+                [ fill <| Fill (colorMap quad)
+                , points (Array.toList <| vertices quad)
+                ]
+                []
 
 
 addChangesToProportions : Float -> Float -> List Float -> Proportions -> Proportions

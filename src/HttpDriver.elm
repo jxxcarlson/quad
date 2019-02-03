@@ -16,7 +16,7 @@ import TypedSvg.Types
 import Time
 import Random
 import Http
-import Quad exposing (Quad, Proportions, ColorRange, render, Position(..))
+import Quad exposing (Quad, Proportions, ColorRange, render, Position(..), RenderMode(..))
 import Parameters exposing (..)
 import Utility
 import Element exposing (..)
@@ -66,6 +66,7 @@ type alias Model =
     , sensorValue : Maybe Float
     , stayAliveTreshold : Float
     , appState : AppState
+    , renderMode : RenderMode
     }
 
 
@@ -102,11 +103,12 @@ init flags =
       , initialColorRange = [ ( 0.5, 0.6 ), ( 0.4, 0.8 ), ( 0.2, 1.0 ), ( 0.99, 1.0 ) ]
       , colorRange = [ ( 0.5, 0.6 ), ( 0.4, 0.8 ), ( 0.2, 1.0 ), ( 0.99, 1.0 ) ]
       , depth = 1
-      , maxDepth = 7
+      , maxDepth = 8
       , rawSensorValue = Nothing
       , sensorValue = Nothing
       , stayAliveTreshold = 0.2
       , appState = Ready
+      , renderMode = NoStroke
       }
     , Cmd.none
     )
@@ -250,7 +252,7 @@ update msg model =
                                     rawSensorValue
 
                         sensorValue =
-                            rawSensorValue |> Maybe.map (Utility.mapToRange 1 50 0 1)
+                            rawSensorValue |> Maybe.map (Utility.mapToRange 6 30 0 1)
 
                         newDepth =
                             resetDepth sensorValue model
@@ -508,7 +510,7 @@ viewSvg model =
         TypedSvg.svg
             [ TypedSvg.Attributes.width (TypedSvg.Types.px 750), TypedSvg.Attributes.height (TypedSvg.Types.px 750) ]
         <|
-            List.map (Quad.render Quad.hsla) currentDrawing
+            List.map (Quad.render model.renderMode Quad.hsla) currentDrawing
 
 
 getSensorValue : Cmd Msg
