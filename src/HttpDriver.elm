@@ -48,6 +48,7 @@ type Msg
     | SentLed2Command (Result Http.Error ())
     | PauseApp
     | RunApp
+    | Step
     | AdjustValue DataType Float
 
 
@@ -58,6 +59,7 @@ type alias Model =
     , oldDrawing : List Quad
     , depth : Int
     , proportions : Proportions
+    , initialColorRange : ColorRange
     , colorRange : ColorRange
     , maxDepth : Int
     , rawSensorValue : Maybe Float
@@ -80,6 +82,7 @@ init flags =
       , drawing = [ Quad.basic 750 ]
       , oldDrawing = [ Quad.basic 750 ]
       , proportions = Quad.sampleProportions
+      , initialColorRange = [ ( 0.5, 0.6 ), ( 0.4, 0.8 ), ( 0.2, 1.0 ), ( 0.99, 1.0 ) ]
       , colorRange = [ ( 0.5, 0.6 ), ( 0.4, 0.8 ), ( 0.2, 1.0 ), ( 0.99, 1.0 ) ]
       , depth = 1
       , maxDepth = 7
@@ -140,6 +143,15 @@ update msg model =
 
         RunApp ->
             ( { model | appState = Resting }, Cmd.none )
+
+        Step ->
+            ( { model
+                | appState = GeneratingImage
+                , drawing = [ Quad.basic 750 ]
+                , depth = 1
+              }
+            , Cmd.none
+            )
 
         AdjustValue dataType value ->
             ( setValue model dataType value, Cmd.none )
@@ -263,7 +275,11 @@ edges =
 controlPanel model =
     Element.column [ width fill, height fill, paddingEach { edges | left = 96, top = 24 }, spacing 24, Background.color <| Element.rgb 0.1 0.1 0.1 ]
         [ Element.el controlLabelStyle (text "Quad Art Composer")
-        , Element.row [ spacing 8 ] [ runButton (model.appState /= Pause), pauseButton (model.appState == Pause) ]
+        , Element.row [ spacing 8 ]
+            [ runButton (model.appState /= Pause)
+            , stepButton False
+            , pauseButton (model.appState == Pause)
+            ]
         , dataRow1 "Max depth" (String.fromInt model.maxDepth)
         , Element.column [ spacing 4 ]
             [ dataRow "Hue" (Quad.lowValueAsString 0 model.colorRange) (Quad.highValueAsString 0 model.colorRange)
@@ -307,7 +323,7 @@ getValue : Model -> DataType -> Float
 getValue model dataType =
     case dataType of
         Hue position ->
-            Quad.readColorRangeValue position 0 model.colorRange
+            Quad.readColorRangeValue position 0 model.initialColorRange
 
         Saturation position ->
             Quad.readColorRangeValue position 1 model.colorRange
@@ -325,7 +341,7 @@ setValue model dataType value =
         newColorRange =
             case dataType of
                 Hue position ->
-                    Quad.setColorRangeValue position 0 value model.colorRange
+                    Quad.setColorRangeValue position 0 value model.initialColorRange
 
                 Saturation position ->
                     Quad.setColorRangeValue position 1 value model.colorRange
@@ -336,7 +352,7 @@ setValue model dataType value =
                 Opacity position ->
                     Quad.setColorRangeValue position 3 value model.colorRange
     in
-        { model | colorRange = newColorRange }
+        { model | initialColorRange = newColorRange, colorRange = newColorRange }
 
 
 dataSlider : Model -> String -> DataType -> Element Msg
@@ -415,6 +431,14 @@ runButton active =
     Input.button []
         { onPress = Just RunApp
         , label = Element.el (buttonStyle active) (text "Run")
+        }
+
+
+stepButton : Bool -> Element Msg
+stepButton active =
+    Input.button []
+        { onPress = Just Step
+        , label = Element.el (buttonStyle active) (text "Step")
         }
 
 
