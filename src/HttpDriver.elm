@@ -1,5 +1,6 @@
-module Driver exposing (main, hueChanges)
+module HttpDriver exposing (..)
 
+{- }(main, hueChanges) -}
 {- This is a starter app which presents a text label, text field, and a button.
    What you enter in the text field is echoed in the label.  When you press the
    button, the text in the label is reverse.
@@ -9,15 +10,20 @@ module Driver exposing (main, hueChanges)
 import Browser
 import Html exposing (Html)
 import Color
-import TypedSvg exposing (svg)
-import TypedSvg.Attributes exposing (viewBox, height, width)
-import TypedSvg.Types exposing (px)
+import TypedSvg
+import TypedSvg.Attributes
+import TypedSvg.Types
 import Time
 import Random
 import Http
-import Quad exposing (Quad, Proportions, ColorRange, render)
+import Quad exposing (Quad, Proportions, ColorRange, render, Position(..))
 import Parameters exposing (..)
 import Utility
+import Element exposing (..)
+import Element.Background as Background
+import Element.Border as Border
+import Element.Font as Font
+import Element.Input as Input
 
 
 main =
@@ -40,6 +46,9 @@ type Msg
     | GotSensorValue (Result Http.Error String)
     | SentLedCommand (Result Http.Error ())
     | SentLed2Command (Result Http.Error ())
+    | PauseApp
+    | RunApp
+    | AdjustValue DataType Float
 
 
 type alias Model =
@@ -51,6 +60,7 @@ type alias Model =
     , proportions : Proportions
     , colorRange : ColorRange
     , maxDepth : Int
+    , rawSensorValue : Maybe Float
     , sensorValue : Maybe Float
     , stayAliveTreshold : Float
     , appState : AppState
@@ -60,6 +70,7 @@ type alias Model =
 type AppState
     = Resting
     | GeneratingImage
+    | Pause
 
 
 init : Flags -> ( Model, Cmd Msg )
@@ -69,9 +80,10 @@ init flags =
       , drawing = [ Quad.basic 750 ]
       , oldDrawing = [ Quad.basic 750 ]
       , proportions = Quad.sampleProportions
-      , colorRange = [ ( 0.5, 0.6 ), ( 0.5, 0.6 ), ( 0.2, 1.0 ), ( 0.99, 1.0 ) ]
+      , colorRange = [ ( 0.5, 0.6 ), ( 0.4, 0.8 ), ( 0.2, 1.0 ), ( 0.99, 1.0 ) ]
       , depth = 1
-      , maxDepth = 6
+      , maxDepth = 7
+      , rawSensorValue = Nothing
       , sensorValue = Nothing
       , stayAliveTreshold = 0.2
       , appState = Resting
@@ -123,8 +135,17 @@ update msg model =
         GetRandomNumbers r ->
             ( { model | randomNumbers = r }, Cmd.none )
 
+        PauseApp ->
+            ( { model | appState = Pause }, Cmd.none )
+
+        RunApp ->
+            ( { model | appState = Resting }, Cmd.none )
+
+        AdjustValue dataType value ->
+            ( setValue model dataType value, Cmd.none )
+
         Tick t ->
-            if model.depth < model.maxDepth then
+            if model.depth < model.maxDepth && model.appState /= Pause then
                 let
                     rands =
                         model.randomNumbers
@@ -161,7 +182,12 @@ update msg model =
                         ]
                     )
             else
-                ( { model | appState = Resting }, Cmd.batch [ getSensorValue, ledCommand model ] )
+                case model.appState of
+                    Pause ->
+                        ( model, Cmd.none )
+
+                    _ ->
+                        ( { model | appState = Resting }, Cmd.batch [ getSensorValue, ledCommand model ] )
 
         SentLedCommand result ->
             ( { model | count = model.count + 1 }, Cmd.none )
@@ -173,13 +199,23 @@ update msg model =
             case result of
                 Ok str ->
                     let
-                        maybeSensorValue =
+                        rawSensorValue =
                             String.toFloat str
-                                |> Maybe.map (Utility.roundToPlaces 1)
-                                |> Maybe.map (Utility.mapToRange 1 50 0 1)
+
+                        newRawSensorValue =
+                            case ( model.rawSensorValue, rawSensorValue ) of
+                                ( Just oldValue, Just newValue ) ->
+                                    Just (0.5 * newValue + 0.5 * oldValue)
+                                        |> Maybe.map (Utility.roundToPlaces 0)
+
+                                ( _, _ ) ->
+                                    rawSensorValue
+
+                        sensorValue =
+                            rawSensorValue |> Maybe.map (Utility.mapToRange 1 50 0 1)
 
                         newDepth =
-                            resetDepth maybeSensorValue model
+                            resetDepth sensorValue model
 
                         newDrawing =
                             if newDepth == 1 then
@@ -188,9 +224,10 @@ update msg model =
                                 model.drawing
                     in
                         ( { model
-                            | sensorValue = maybeSensorValue
-                            , colorRange = setColorRange maybeSensorValue model.colorRange
-                            , depth = resetDepth maybeSensorValue model
+                            | rawSensorValue = newRawSensorValue
+                            , sensorValue = sensorValue
+                            , colorRange = setColorRange sensorValue model.colorRange
+                            , depth = resetDepth sensorValue model
                             , drawing = newDrawing
                           }
                         , Cmd.none
@@ -202,6 +239,214 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
+    Element.layoutWith { options = [ focusStyle myFocusStyle ] } [] (mainRow model)
+
+
+myFocusStyle =
+    { borderColor = Nothing, backgroundColor = Nothing, shadow = Nothing }
+
+
+mainRow : Model -> Element Msg
+mainRow model =
+    Element.row [ width fill ]
+        [ Element.html (viewSvg model), controlPanel model ]
+
+
+edges =
+    { top = 0
+    , right = 0
+    , bottom = 0
+    , left = 0
+    }
+
+
+controlPanel model =
+    Element.column [ width fill, height fill, paddingEach { edges | left = 96, top = 24 }, spacing 24, Background.color <| Element.rgb 0.1 0.1 0.1 ]
+        [ Element.el controlLabelStyle (text "Quad Art Composer")
+        , Element.row [ spacing 8 ] [ runButton (model.appState /= Pause), pauseButton (model.appState == Pause) ]
+        , dataRow1 "Max depth" (String.fromInt model.maxDepth)
+        , Element.column [ spacing 4 ]
+            [ dataRow "Hue" (Quad.lowValueAsString 0 model.colorRange) (Quad.highValueAsString 0 model.colorRange)
+            , dataSlider model "HL" (Hue Low)
+            , dataSlider model "HH" (Hue High)
+            ]
+        , Element.column [ spacing 4 ]
+            [ dataRow "Saturation" (Quad.lowValueAsString 1 model.colorRange) (Quad.highValueAsString 1 model.colorRange)
+            , dataSlider model "SL" (Saturation Low)
+            , dataSlider model "SH" (Saturation High)
+            ]
+        , Element.column [ spacing 4 ]
+            [ dataRow "Lightness" (Quad.lowValueAsString 2 model.colorRange) (Quad.highValueAsString 2 model.colorRange)
+            , dataSlider model "LL" (Lightness Low)
+            , dataSlider model "LH" (Lightness High)
+            ]
+        , Element.column [ spacing 4 ]
+            [ dataRow "Opacity" (Quad.lowValueAsString 3 model.colorRange) (Quad.highValueAsString 3 model.colorRange)
+            , dataSlider model "OL" (Opacity Low)
+            , dataSlider model "OH" (Opacity High)
+            ]
+        , Element.column [ spacing 4 ]
+            [ dataRow "Proportions H" (Quad.proportionAsString 0 model.proportions) (Quad.proportionAsString 2 model.proportions)
+            , dataRow "Proportions V" (Quad.proportionAsString 1 model.proportions) (Quad.proportionAsString 3 model.proportions)
+            ]
+        , Element.row [ spacing 12, alignBottom, paddingEach { edges | bottom = 24 } ]
+            [ Element.el controlLabelStyle (text <| distanceReading model)
+            , Element.el controlLabelStyle (text <| sensorReading model)
+            ]
+        ]
+
+
+type DataType
+    = Hue Position
+    | Saturation Position
+    | Lightness Position
+    | Opacity Position
+
+
+getValue : Model -> DataType -> Float
+getValue model dataType =
+    case dataType of
+        Hue position ->
+            Quad.readColorRangeValue position 0 model.colorRange
+
+        Saturation position ->
+            Quad.readColorRangeValue position 1 model.colorRange
+
+        Lightness position ->
+            Quad.readColorRangeValue position 2 model.colorRange
+
+        Opacity position ->
+            Quad.readColorRangeValue position 3 model.colorRange
+
+
+setValue : Model -> DataType -> Float -> Model
+setValue model dataType value =
+    let
+        newColorRange =
+            case dataType of
+                Hue position ->
+                    Quad.setColorRangeValue position 0 value model.colorRange
+
+                Saturation position ->
+                    Quad.setColorRangeValue position 1 value model.colorRange
+
+                Lightness position ->
+                    Quad.setColorRangeValue position 2 value model.colorRange
+
+                Opacity position ->
+                    Quad.setColorRangeValue position 3 value model.colorRange
+    in
+        { model | colorRange = newColorRange }
+
+
+dataSlider : Model -> String -> DataType -> Element Msg
+dataSlider model label dataType =
+    Input.slider
+        [ Element.height (Element.px 20)
+        , Element.behindContent
+            (Element.el
+                [ Element.width (Element.px 210)
+                , Element.height (Element.px 2)
+                , Element.centerY
+                , Background.color <| Element.rgb 0.4 0.4 0.4
+                , Border.rounded 2
+                ]
+                Element.none
+            )
+        ]
+        { onChange = AdjustValue dataType
+        , label = Input.labelLeft sliderLabelStyle (text label)
+        , min = 0.0
+        , max = 1.4
+        , step = Nothing
+        , value = getValue model dataType
+        , thumb =
+            Input.defaultThumb
+        }
+
+
+dataRow : String -> String -> String -> Element msg
+dataRow label a b =
+    Element.row [ spacing 8, Font.color <| Element.rgb 0.7 0.7 0.7 ]
+        [ Element.el [ width (px 130) ] (text label)
+        , Element.el [ width (px 90) ] (text <| a)
+        , Element.el [ width (px 90) ] (text <| b)
+        ]
+
+
+dataRow1 : String -> String -> Element msg
+dataRow1 label a =
+    Element.row [ spacing 8, Font.color <| Element.rgb 0.7 0.7 0.7 ]
+        [ Element.el [ width (px 130) ] (text label)
+        , Element.el [ width (px 90) ] (text <| a)
+        ]
+
+
+distanceReading : Model -> String
+distanceReading model =
+    case model.rawSensorValue of
+        Nothing ->
+            "Distance: _"
+
+        Just distance ->
+            "Distance: " ++ String.fromFloat distance ++ " cm"
+
+
+sensorReading : Model -> String
+sensorReading model =
+    case model.sensorValue of
+        Nothing ->
+            "Sensor: _"
+
+        Just value ->
+            "Sensor: " ++ (String.fromFloat (value |> Utility.roundToPlaces 2))
+
+
+controlLabelStyle =
+    [ Font.color <| Element.rgb 0.9 0.9 0.9 ]
+
+
+sliderLabelStyle =
+    [ Font.color <| Element.rgb 0.9 0.9 0.9, Font.size 14, moveDown 5, paddingEach { edges | right = 8 } ]
+
+
+runButton : Bool -> Element Msg
+runButton active =
+    Input.button []
+        { onPress = Just RunApp
+        , label = Element.el (buttonStyle active) (text "Run")
+        }
+
+
+pauseButton : Bool -> Element Msg
+pauseButton active =
+    Input.button []
+        { onPress = Just PauseApp
+        , label = Element.el (buttonStyle active) (text "Pause")
+        }
+
+
+
+-- buttonStyle : Bool -> Element.Attribute msg
+
+
+buttonStyle active =
+    case active of
+        False ->
+            [ Font.color <| Element.rgb 0.8 0.8 0.8
+            , Background.color <| Element.rgb 0.2 0.2 0.2
+            , padding 8
+            ]
+
+        True ->
+            [ Font.color <| Element.rgb 0.8 0.8 0.8
+            , Background.color <| Element.rgb 0.6 0.2 0.2
+            , padding 8
+            ]
+
+
+viewSvg : Model -> Html Msg
+viewSvg model =
     let
         currentDrawing =
             if model.depth == 1 then
@@ -209,8 +454,8 @@ view model =
             else
                 model.drawing
     in
-        svg
-            [ width (px 900), height (px 900) ]
+        TypedSvg.svg
+            [ TypedSvg.Attributes.width (TypedSvg.Types.px 750), TypedSvg.Attributes.height (TypedSvg.Types.px 750) ]
         <|
             List.map (Quad.render Quad.hsla) currentDrawing
 
@@ -233,6 +478,9 @@ ledCommand model =
             Cmd.batch [ ledOff, led2Off ]
 
         ( Resting, _ ) ->
+            Cmd.batch [ ledOff, led2On ]
+
+        ( Pause, _ ) ->
             Cmd.batch [ ledOff, led2On ]
 
 
@@ -286,8 +534,8 @@ setColorRange sensorValue colorRange =
 
 
 resetDepth : Maybe Float -> Model -> Int
-resetDepth maybeSensorValue model =
-    case ( maybeSensorValue, model.sensorValue ) of
+resetDepth sensorValue model =
+    case ( sensorValue, model.sensorValue ) of
         ( Nothing, _ ) ->
             model.depth
 

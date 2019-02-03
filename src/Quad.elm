@@ -3,6 +3,7 @@ module Quad
         ( Quad
         , ColorRange
         , Proportions
+        , Position(..)
         , render
         , update
         , basic
@@ -11,17 +12,24 @@ module Quad
         , hsla
         , rgba
         , addChangesToProportions
+        , lowValueAsString
+        , highValueAsString
+        , proportionAsString
+        , readColorRangeValue
+        , setColorRangeValue
         )
 
 {- }(Quad(..), Vertices, basic, vertices, color, subdivide) -}
 
 import Array exposing (Array)
 import Maybe.Extra
+import List.Extra
 import Color
 import TypedSvg exposing (svg)
 import TypedSvg.Attributes exposing (points, fill, stroke)
 import TypedSvg.Types exposing (Fill(..), px)
 import Svg exposing (Svg)
+import Utility
 
 
 type Quad
@@ -51,6 +59,45 @@ type alias Color =
 
 type alias ColorRange =
     List ( Float, Float )
+
+
+type Position
+    = Low
+    | High
+
+
+readColorRangeValue : Position -> Int -> ColorRange -> Float
+readColorRangeValue position index colorRange =
+    case List.Extra.getAt index colorRange of
+        Nothing ->
+            0.5
+
+        Just tuple ->
+            case position of
+                Low ->
+                    Tuple.first tuple
+
+                High ->
+                    Tuple.second tuple
+
+
+setColorRangeValue : Position -> Int -> Float -> ColorRange -> ColorRange
+setColorRangeValue position index value colorRange =
+    case List.Extra.getAt index colorRange of
+        Nothing ->
+            colorRange
+
+        Just tuple ->
+            let
+                newTuple =
+                    case position of
+                        Low ->
+                            ( clamp 0 (Tuple.second tuple) value, Tuple.second tuple )
+
+                        High ->
+                            ( Tuple.first tuple, clamp (Tuple.first tuple) 1 value )
+            in
+                List.Extra.updateAt index (\item -> newTuple) colorRange
 
 
 type alias ColorChange =
@@ -130,6 +177,36 @@ setState threshold p (Quad vv cc state_) =
 
 basicColorRange =
     [ ( 0.5, 0.6 ), ( 0.2, 0.4 ), ( 0.0, 1.0 ), ( 0.99, 1.0 ) ]
+
+
+lowValueAsString : Int -> ColorRange -> String
+lowValueAsString k colorRange =
+    case List.Extra.getAt k colorRange |> Maybe.map Tuple.first of
+        Nothing ->
+            "-"
+
+        Just value ->
+            String.fromFloat (Utility.roundToPlaces 2 value)
+
+
+highValueAsString : Int -> ColorRange -> String
+highValueAsString k colorRange =
+    case List.Extra.getAt k colorRange |> Maybe.map Tuple.second of
+        Nothing ->
+            "-"
+
+        Just value ->
+            String.fromFloat (Utility.roundToPlaces 2 value)
+
+
+proportionAsString : Int -> Proportions -> String
+proportionAsString k proportion =
+    case Array.get k proportion of
+        Nothing ->
+            "-"
+
+        Just value ->
+            String.fromFloat (Utility.roundToPlaces 2 value)
 
 
 sampleColorChange =
