@@ -70,9 +70,26 @@ type alias Model =
 
 
 type AppState
-    = Resting
+    = Ready
     | GeneratingImage
+    | Stepping
     | Pause
+
+
+appStateAsString : AppState -> String
+appStateAsString s =
+    case s of
+        Ready ->
+            "Ready"
+
+        GeneratingImage ->
+            "Generating Image"
+
+        Stepping ->
+            "Stepping"
+
+        Pause ->
+            "Paused"
 
 
 init : Flags -> ( Model, Cmd Msg )
@@ -89,7 +106,7 @@ init flags =
       , rawSensorValue = Nothing
       , sensorValue = Nothing
       , stayAliveTreshold = 0.2
-      , appState = Resting
+      , appState = Ready
       }
     , Cmd.none
     )
@@ -142,11 +159,11 @@ update msg model =
             ( { model | appState = Pause }, Cmd.none )
 
         RunApp ->
-            ( { model | appState = Resting }, Cmd.none )
+            ( { model | appState = Ready }, Cmd.none )
 
         Step ->
             ( { model
-                | appState = GeneratingImage
+                | appState = Stepping
                 , drawing = [ Quad.basic 750 ]
                 , depth = 1
               }
@@ -157,7 +174,7 @@ update msg model =
             ( setValue model dataType value, Cmd.none )
 
         Tick t ->
-            if model.depth < model.maxDepth && model.appState /= Pause then
+            if model.depth < model.maxDepth && List.member model.appState [ Ready, GeneratingImage, Stepping ] then
                 let
                     rands =
                         model.randomNumbers
@@ -180,13 +197,19 @@ update msg model =
                             colorChanges
                             newProportions
                             model.drawing
+
+                    nextAppState =
+                        if model.appState == Stepping then
+                            Stepping
+                        else
+                            GeneratingImage
                 in
                     ( { model
                         | depth = model.depth + 1
                         , drawing = newDrawing
                         , oldDrawing = model.drawing
                         , proportions = newProportions
-                        , appState = GeneratingImage
+                        , appState = nextAppState
                       }
                     , Cmd.batch
                         [ Random.generate GetRandomNumbers (Random.list 10 (Random.float 0 1))
@@ -196,10 +219,13 @@ update msg model =
             else
                 case model.appState of
                     Pause ->
-                        ( model, Cmd.none )
+                        ( model, Cmd.batch [ ledOff, led2On ] )
+
+                    Stepping ->
+                        ( { model | appState = Pause }, Cmd.none )
 
                     _ ->
-                        ( { model | appState = Resting }, Cmd.batch [ getSensorValue, ledCommand model ] )
+                        ( { model | appState = Ready }, Cmd.batch [ getSensorValue, ledCommand model ] )
 
         SentLedCommand result ->
             ( { model | count = model.count + 1 }, Cmd.none )
@@ -212,7 +238,7 @@ update msg model =
                 Ok str ->
                     let
                         rawSensorValue =
-                            String.toFloat str
+                            String.toFloat str |> Maybe.map (Utility.roundToPlaces 0)
 
                         newRawSensorValue =
                             case ( model.rawSensorValue, rawSensorValue ) of
@@ -276,8 +302,8 @@ controlPanel model =
     Element.column [ width fill, height fill, paddingEach { edges | left = 96, top = 24 }, spacing 24, Background.color <| Element.rgb 0.1 0.1 0.1 ]
         [ Element.el controlLabelStyle (text "Quad Art Composer")
         , Element.row [ spacing 8 ]
-            [ runButton (model.appState /= Pause)
-            , stepButton False
+            [ runButton (List.member model.appState [ Ready, GeneratingImage ])
+            , stepButton (model.appState == Stepping)
             , pauseButton (model.appState == Pause)
             ]
         , dataRow1 "Max depth" (String.fromInt model.maxDepth)
@@ -306,8 +332,9 @@ controlPanel model =
             , dataRow "Proportions V" (Quad.proportionAsString 1 model.proportions) (Quad.proportionAsString 3 model.proportions)
             ]
         , Element.row [ spacing 12, alignBottom, paddingEach { edges | bottom = 24 } ]
-            [ Element.el controlLabelStyle (text <| distanceReading model)
+            [ Element.el (controlLabelStyle ++ [ width (px 155) ]) (text <| distanceReading model)
             , Element.el controlLabelStyle (text <| sensorReading model)
+            , Element.el controlLabelStyle (text <| "Depth: " ++ (String.fromInt model.depth))
             ]
         ]
 
@@ -501,7 +528,13 @@ ledCommand model =
         ( GeneratingImage, False ) ->
             Cmd.batch [ ledOff, led2Off ]
 
-        ( Resting, _ ) ->
+        ( Stepping, True ) ->
+            Cmd.batch [ ledOn, led2Off ]
+
+        ( Stepping, False ) ->
+            Cmd.batch [ ledOff, led2Off ]
+
+        ( Ready, _ ) ->
             Cmd.batch [ ledOff, led2On ]
 
         ( Pause, _ ) ->
