@@ -51,6 +51,8 @@ type Msg
     | Step
     | AdjustValue DataType Float
     | ToggleRenderMode
+    | AcceptMaxDepth String
+    | AcceptStayAliveThreshold String
 
 
 type alias Model =
@@ -65,9 +67,10 @@ type alias Model =
     , maxDepth : Int
     , rawSensorValue : Maybe Float
     , sensorValue : Maybe Float
-    , stayAliveTreshold : Float
+    , stayAliveThreshold : Float
     , appState : AppState
     , renderMode : RenderMode
+    , tickInterval : Float
     }
 
 
@@ -104,12 +107,13 @@ init flags =
       , initialColorRange = [ ( 0.5, 0.6 ), ( 0.4, 0.8 ), ( 0.2, 1.0 ), ( 0.99, 1.0 ) ]
       , colorRange = [ ( 0.5, 0.6 ), ( 0.4, 0.8 ), ( 0.2, 1.0 ), ( 0.99, 1.0 ) ]
       , depth = 1
-      , maxDepth = 8
+      , maxDepth = 7
       , rawSensorValue = Nothing
       , sensorValue = Nothing
-      , stayAliveTreshold = 0.2
+      , stayAliveThreshold = 0.2
       , appState = Ready
       , renderMode = NoStroke
+      , tickInterval = 200
       }
     , Cmd.none
     )
@@ -146,7 +150,7 @@ hslChanges dhList dsList dlList =
 
 
 subscriptions model =
-    Time.every 200 Tick
+    Time.every model.tickInterval Tick
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -163,6 +167,22 @@ update msg model =
 
         RunApp ->
             ( { model | appState = Ready }, Cmd.none )
+
+        AcceptMaxDepth str ->
+            case String.toInt str of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just k ->
+                    ( { model | maxDepth = k }, Cmd.none )
+
+        AcceptStayAliveThreshold str ->
+            case String.toFloat str of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just p ->
+                    ( { model | stayAliveThreshold = p }, Cmd.none )
 
         Step ->
             ( { model
@@ -189,7 +209,7 @@ update msg model =
                 let
                     rands =
                         model.randomNumbers
-                            |> List.map (\x -> (2 * x - 1) / 8.0)
+                            |> List.map (\x -> (2 * x - 1) / 20.0)
 
                     newProportions =
                         if model.depth > 1 then
@@ -202,7 +222,7 @@ update msg model =
 
                     newDrawing =
                         Quad.update
-                            model.stayAliveTreshold
+                            model.stayAliveThreshold
                             model.randomNumbers
                             model.colorRange
                             colorChanges
@@ -221,6 +241,7 @@ update msg model =
                         , oldDrawing = model.drawing
                         , proportions = newProportions
                         , appState = nextAppState
+                        , tickInterval = 20
                       }
                     , Cmd.batch
                         [ Random.generate GetRandomNumbers (Random.list 10 (Random.float 0 1))
@@ -230,13 +251,13 @@ update msg model =
             else
                 case model.appState of
                     Pause ->
-                        ( model, Cmd.batch [ ledOff, led2On ] )
+                        ( { model | tickInterval = 200 }, Cmd.batch [ ledOff, led2On ] )
 
                     Stepping ->
-                        ( { model | appState = Pause }, Cmd.none )
+                        ( { model | appState = Pause, tickInterval = 200 }, Cmd.none )
 
                     _ ->
-                        ( { model | appState = Ready }, Cmd.batch [ getSensorValue, ledCommand model ] )
+                        ( { model | appState = Ready, tickInterval = 200 }, Cmd.batch [ getSensorValue, ledCommand model ] )
 
         SentLedCommand result ->
             ( { model | count = model.count + 1 }, Cmd.none )
@@ -318,7 +339,7 @@ controlPanel model =
             , pauseButton (model.appState == Pause)
             ]
         , toggleRenderModeButton model.renderMode
-        , dataRow1 "Max depth" (String.fromInt model.maxDepth)
+        , Element.row [ spacing 12 ] [ maxDepthInput model, stayAliveThresholdInput model ] -- dataRow1 "Max depth" (String.fromInt model.maxDepth)
         , Element.column [ spacing 4 ]
             [ dataRow "Hue" (Quad.lowValueAsString 0 model.colorRange) (Quad.highValueAsString 0 model.colorRange)
             , dataSlider model "HL" (Hue Low)
@@ -347,6 +368,7 @@ controlPanel model =
             [ Element.el (controlLabelStyle ++ [ width (px 155) ]) (text <| distanceReading model)
             , Element.el controlLabelStyle (text <| sensorReading model)
             , Element.el controlLabelStyle (text <| "Depth: " ++ (String.fromInt model.depth))
+            , Element.el controlLabelStyle (text <| "Quads: " ++ (String.fromInt (List.length model.drawing)))
             ]
         ]
 
@@ -392,6 +414,38 @@ setValue model dataType value =
                     Quad.setColorRangeValue position 3 value model.colorRange
     in
         { model | initialColorRange = newColorRange, colorRange = newColorRange }
+
+
+maxDepthInput : Model -> Element Msg
+maxDepthInput model =
+    Input.text (inputStyle 40)
+        { onChange = AcceptMaxDepth
+        , text = String.fromInt model.maxDepth
+        , placeholder = Nothing
+        , label = Input.labelLeft controlLabelStyle (Element.el [] (text "Max depth"))
+        }
+
+
+stayAliveThresholdInput : Model -> Element Msg
+stayAliveThresholdInput model =
+    Input.text (inputStyle 60)
+        { onChange = AcceptStayAliveThreshold
+        , text = String.fromFloat model.stayAliveThreshold
+        , placeholder = Nothing
+        , label = Input.labelLeft controlLabelStyle (Element.el [] (text "Death rate"))
+        }
+
+
+inputStyle : Int -> List (Attribute msg)
+inputStyle width_ =
+    [ width (px width_)
+    , moveRight 8
+    , moveUp 6
+    , height (px 20)
+    , Font.size 14
+    , Font.color <| Element.rgb 0.9 0.9 0.9
+    , Background.color <| Element.rgb 0.2 0.2 0.2
+    ]
 
 
 dataSlider : Model -> String -> DataType -> Element Msg
