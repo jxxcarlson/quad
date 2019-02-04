@@ -1,35 +1,34 @@
-module Quad
-    exposing
-        ( Quad
-        , ColorRange
-        , Proportions
-        , Position(..)
-        , RenderMode(..)
-        , render
-        , update
-        , basic
-        , sampleProportions
-        , basicColorRange
-        , hsla
-        , rgba
-        , addChangesToProportions
-        , lowValueAsString
-        , highValueAsString
-        , proportionAsString
-        , readColorRangeValue
-        , setColorRangeValue
-        )
+module Quad exposing
+    ( ColorRange
+    , Position(..)
+    , Proportions
+    , Quad
+    , RenderMode(..)
+    , addChangesToProportions
+    , basic
+    , basicColorRange
+    , highValueAsString
+    , hsla
+    , lowValueAsString
+    , proportionAsString
+    , readColorRangeValue
+    , render
+    , rgba
+    , sampleProportions
+    , setColorRangeValue
+    , update
+    )
 
 {- }(Quad(..), Vertices, basic, vertices, color, subdivide) -}
 
 import Array exposing (Array)
-import Maybe.Extra
-import List.Extra
 import Color
-import TypedSvg exposing (svg)
-import TypedSvg.Attributes exposing (points, fill, stroke)
-import TypedSvg.Types exposing (Fill(..), px)
+import List.Extra
+import Maybe.Extra
 import Svg exposing (Svg)
+import TypedSvg exposing (svg)
+import TypedSvg.Attributes exposing (fill, points, stroke)
+import TypedSvg.Types exposing (Fill(..), px)
 import Utility
 
 
@@ -84,21 +83,16 @@ readColorRangeValue position index colorRange =
 
 setColorRangeValue : Position -> Int -> Float -> ColorRange -> ColorRange
 setColorRangeValue position index value colorRange =
-    case List.Extra.getAt index colorRange of
-        Nothing ->
-            colorRange
+    let
+        updateTuple ( l, r ) =
+            case position of
+                Low ->
+                    ( clamp 0 r value, r )
 
-        Just tuple ->
-            let
-                newTuple =
-                    case position of
-                        Low ->
-                            ( clamp 0 (Tuple.second tuple) value, Tuple.second tuple )
-
-                        High ->
-                            ( Tuple.first tuple, clamp (Tuple.first tuple) 1 value )
-            in
-                List.Extra.updateAt index (\item -> newTuple) colorRange
+                High ->
+                    ( l, clamp l 1 value )
+    in
+    List.Extra.updateAt index updateTuple colorRange
 
 
 type alias ColorChange =
@@ -153,18 +147,52 @@ addChangesToProportions lowerBound upperBound dps proportions =
             List.map2 (+) proportionList dps
                 |> List.map (clamp lowerBound upperBound)
     in
-        Array.fromList newProportions
+    Array.fromList newProportions
 
 
 {-| update basicColorRange [sampleColorChange] ps [basic 4]
 -}
 update : Float -> List Float -> ColorRange -> List ColorChange -> Proportions -> List Quad -> List Quad
 update threshold randomNumbers colorRange colorChangeList proportions quadList =
-    quadList
-        |> setStateOfQuadList threshold randomNumbers
-        |> List.map (subdivide proportions)
-        |> List.concat
-        |> changeColorOfQuadList colorRange colorChangeList
+    List.foldl
+        (updateQuad
+            ( threshold, Array.fromList randomNumbers )
+            ( colorRange, Array.fromList colorChangeList )
+            proportions
+        )
+        ( 0, [] )
+        quadList
+        |> Tuple.second
+
+
+
+-- |> setStateOfQuadList threshold randomNumbers
+-- |> List.map (subdivide proportions)
+-- |> List.concat
+-- |> changeColorOfQuadList colorRange colorChangeList
+
+
+updateQuad :
+    ( Float, Array Float )
+    -> ( ColorRange, Array ColorChange )
+    -> Proportions
+    -> Quad
+    -> ( Int, List Quad )
+    -> ( Int, List Quad )
+updateQuad ( threshold, randomNumbers ) colorInfo proportions quad ( idx, acc ) =
+    quad
+        |> setState threshold (circularGet idx randomNumbers)
+        |> subdivide idx acc colorInfo proportions
+
+
+circularGet : Int -> Array a -> a
+circularGet idx xs =
+    case Array.get idx xs of
+        Just v ->
+            v
+
+        Nothing ->
+            circularGet (idx - Array.length xs) xs
 
 
 setStateOfQuadList : Float -> List Float -> List Quad -> List Quad
@@ -173,15 +201,16 @@ setStateOfQuadList threshold probabilities quadList =
         ps =
             extendList (List.length quadList) probabilities
     in
-        List.map2 (setState threshold) ps quadList
+    List.map2 (setState threshold) ps quadList
 
 
 setState : Float -> Float -> Quad -> Quad
 setState threshold p (Quad vv cc state_) =
     if p > threshold then
-        (Quad vv cc Alive)
+        Quad vv cc Alive
+
     else
-        (Quad vv cc Dead)
+        Quad vv cc Dead
 
 
 
@@ -275,7 +304,7 @@ basic size =
         color_ =
             [ p, q, r, s ]
     in
-        Quad vertices_ color_ Alive
+    Quad vertices_ color_ Alive
 
 
 
@@ -333,9 +362,9 @@ changeColorOfQuadList colorRange colorChangeList quadList =
         colorChangeList_ =
             extendList (List.length quadList) colorChangeList
     in
-        List.map2 (\colorChange_ quad_ -> changeColorOfQuad colorRange colorChange_ quad_)
-            colorChangeList_
-            quadList
+    List.map2 (\colorChange_ quad_ -> changeColorOfQuad colorRange colorChange_ quad_)
+        colorChangeList_
+        quadList
 
 
 extendList : Int -> List a -> List a
@@ -350,9 +379,9 @@ extendList n list =
         remainder =
             modBy listLength n
     in
-        (List.repeat blocks list |> List.concat)
-            ++ List.take remainder list
-            |> List.take n
+    (List.repeat blocks list |> List.concat)
+        ++ List.take remainder list
+        |> List.take n
 
 
 {-| changeColorOfQuad basicColorRange sampleColorChange (basic 4)
@@ -370,9 +399,9 @@ changeColor colorRange_ colorChange_ color_ =
         clamps =
             List.map (\( a, b ) -> clamp a b) colorRange_
     in
-        List.map2 (\f x -> f x)
-            clamps
-            (List.map2 (+) colorChange_ color_)
+    List.map2 (\f x -> f x)
+        clamps
+        (List.map2 (+) colorChange_ color_)
 
 
 
@@ -383,11 +412,11 @@ changeColor colorRange_ colorChange_ color_ =
 
 {-| subdivide ps (basic 4) |> List.map (subdivide ps) |> List.concat
 -}
-subdivide : Proportions -> Quad -> List Quad
-subdivide proportions quad =
-    case (state quad) of
+subdivide : Int -> List Quad -> ( ColorRange, Array ColorChange ) -> Proportions -> Quad -> ( Int, List Quad )
+subdivide idx acc ( colorRange, colorChanges ) proportions quad =
+    case state quad of
         Dead ->
-            [ quad ]
+            ( idx + 1, quad :: acc )
 
         Alive ->
             let
@@ -400,74 +429,71 @@ subdivide proportions quad =
                 center_ =
                     center newVertices_
 
-                vList0 =
+                vv0 =
                     makeVertices 3 0 0 center_ oldVertices_ newVertices_
 
-                vList1 =
+                vv1 =
                     makeVertices 0 1 1 center_ oldVertices_ newVertices_
 
-                vList2 =
+                vv2 =
                     makeVertices 1 2 2 center_ oldVertices_ newVertices_
 
-                vList3 =
+                vv3 =
                     makeVertices 2 3 3 center_ oldVertices_ newVertices_
 
                 colors =
                     color quad
             in
-                [ vList0, vList1, vList2, vList3 ]
-                    |> List.map (\vv -> Maybe.map3 Quad vv (Just (color quad)) (Just <| state quad))
-                    |> Maybe.Extra.combine
-                    |> Maybe.withDefault []
+            ( idx + 4
+            , Quad vv0 (changeColor colorRange (circularGet idx colorChanges) colors) Alive
+                :: Quad vv1 (changeColor colorRange (circularGet (idx + 1) colorChanges) colors) Alive
+                :: Quad vv2 (changeColor colorRange (circularGet (idx + 2) colorChanges) colors) Alive
+                :: Quad vv3 (changeColor colorRange (circularGet (idx + 3) colorChanges) colors) Alive
+                :: acc
+            )
 
 
-makeVertices : Int -> Int -> Int -> Maybe Point -> Vertices -> Maybe Vertices -> Maybe Vertices
+makeVertices : Int -> Int -> Int -> Point -> Vertices -> Vertices -> Vertices
 makeVertices i j k center_ oldVertices_ newVertices_ =
     let
         a =
-            Maybe.andThen (Array.get i) newVertices_
+            circularGet i newVertices_
 
         b =
-            Array.get j oldVertices_
+            circularGet j oldVertices_
 
         c =
-            Maybe.andThen (Array.get k) newVertices_
+            circularGet k newVertices_
     in
-        [ a, b, c, center_ ] |> Maybe.Extra.combine |> Maybe.map Array.fromList
+    Array.fromList [ a, b, c, center_ ]
 
 
-newVertices : Proportions -> Quad -> Maybe Vertices
+newVertices : Proportions -> Quad -> Vertices
 newVertices proportions quad =
     [ 0, 1, 2, 3 ]
-        |> List.map (\k -> divisionPointFromQuad k proportions quad)
-        |> Maybe.Extra.combine
-        |> Maybe.map Array.fromList
+        |> List.map (divisionPointFromQuad proportions quad)
+        |> Array.fromList
 
 
-center : Maybe Vertices -> Maybe Point
+center : Vertices -> Point
 center vertices_ =
     let
-        p =
-            Maybe.andThen (Array.get 0) vertices_
+        ( a, b ) =
+            circularGet 0 vertices_
 
-        q =
-            Maybe.andThen (Array.get 2) vertices_
+        ( c, d ) =
+            circularGet 2 vertices_
 
-        r =
-            Maybe.andThen (Array.get 3) vertices_
+        ( e, f ) =
+            circularGet 3 vertices_
 
-        s =
-            Maybe.andThen (Array.get 1) vertices_
+        ( g, h ) =
+            circularGet 1 vertices_
     in
-        case ( ( p, q ), ( r, s ) ) of
-            ( ( Just ( a, b ), Just ( c, d ) ), ( Just ( e, f ), Just ( g, h ) ) ) ->
-                computeCenter a b c d e f g h
-
-            ( _, _ ) ->
-                Nothing
+    computeCenter a b c d e f g h
 
 
-computeCenter : Float -> Float -> Float -> Float -> Float -> Float -> Float -> Float -> Maybe Point
+computeCenter : Float -> Float -> Float -> Float -> Float -> Float -> Float -> Float -> Point
 computeCenter a b c d e f g h =
     let
         det =
@@ -483,12 +509,12 @@ computeCenter a b c d e f g h =
             (h - f) * g + (e - g) * h
 
         xminor =
-            (p * (e - g) - q * (c - a))
+            p * (e - g) - q * (c - a)
 
         yminor =
-            (q * (b - d) - p * (h - f))
+            q * (b - d) - p * (h - f)
     in
-        Just ( xminor / det, yminor / det )
+    ( xminor / det, yminor / det )
 
 
 {-| ps = Array.fromList (List.repeat 4 0.5)
@@ -498,33 +524,34 @@ Array.fromList [0.5,0.5,0.5,0.5]
 > Just (0.5,0) : Maybe Point
 
 -}
-divisionPointFromQuad : Int -> Proportions -> Quad -> Maybe Point
-divisionPointFromQuad k proportions quad =
+divisionPointFromQuad : Proportions -> Quad -> Int -> Point
+divisionPointFromQuad proportions quad k =
     let
         p =
-            Array.get (modBy 4 k) proportions
+            circularGet k proportions
 
         a =
-            Array.get (modBy 4 k) (vertices quad)
+            circularGet k (vertices quad)
 
         b =
-            Array.get (modBy 4 (k + 1)) (vertices quad)
+            circularGet (k + 1) (vertices quad)
     in
-        Maybe.map3 divisionPoint p a b
+    divisionPoint p a b
 
 
 {-|
 
 > divisionPoint 0.5 (0,0) (1,1)
 > (0.5,0.5) : Point
+
 -}
 divisionPoint : Float -> Point -> Point -> Point
 divisionPoint p a b =
     let
         x =
-            p * (Tuple.first a) + (1 - p) * (Tuple.first b)
+            p * Tuple.first a + (1 - p) * Tuple.first b
 
         y =
-            p * (Tuple.second a) + (1 - p) * (Tuple.second b)
+            p * Tuple.second a + (1 - p) * Tuple.second b
     in
-        ( x, y )
+    ( x, y )
